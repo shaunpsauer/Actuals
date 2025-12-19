@@ -389,8 +389,15 @@ def create_resource_file(df_actuals):
     
     for _, row in unique_resources.iterrows():
         resource_code = row['Resource']
-        description = row['Description']
         cost_type = row['Cost Type']
+        
+        # For labor resources, use resource code (without "6" prefix) as description
+        # For other resources, use the Description from df_actuals
+        if cost_type == 'Labor':
+            # Remove "6" prefix from resource code
+            description = resource_code[1:] if resource_code.startswith('6') else resource_code
+        else:
+            description = row['Description']
         
         # Get prefix based on Cost Type
         prefix = COST_TYPE_TO_PREFIX.get(cost_type, DEFAULT_PREFIX)
