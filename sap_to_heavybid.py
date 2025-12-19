@@ -156,62 +156,103 @@ def normalize_cost_element(cost_element):
         return None
 
 
+def derive_abbreviation_from_text(text):
+    """
+    Dynamically derive abbreviation from cost element text.
+    Handles patterns like:
+    - "Maintain & Operate Services" -> "MO"
+    - "Consulting Services" -> "Consult"
+    - "Engineering Services" -> "Engr"
+    """
+    if not text:
+        return None
+    
+    text_lower = text.lower()
+    words = text.split()
+    
+    # Pattern 1: Check for "&" (and) - take first letter of words before and after
+    # e.g., "Maintain & Operate" -> "MO"
+    if '&' in text:
+        parts = text.split('&')
+        if len(parts) == 2:
+            first_part = parts[0].strip().split()[0] if parts[0].strip() else ''
+            second_part = parts[1].strip().split()[0] if parts[1].strip() else ''
+            if first_part and second_part:
+                abbrev = (first_part[0] + second_part[0]).upper()
+                # Handle special cases
+                if abbrev == 'MO':  # Maintain & Operate
+                    return 'MO'
+                elif abbrev == 'EP':  # Engineering & Planning
+                    return 'ENGR'
+                return abbrev
+    
+    # Pattern 2: Known word mappings (first word)
+    first_word = words[0].lower() if words else ''
+    word_mapping = {
+        'consulting': 'Consult',
+        'consult': 'Consult',
+        'engineering': 'Engr',
+        'engineer': 'Engr',
+        'environmental': 'Environ',
+        'environment': 'Environ',
+        'construction': 'Constr',
+        'contract': 'Contract',
+        'meals': 'Meals',
+        'reimbursed': 'Reimburs',
+        'maintain': 'MO',  # If no &, but starts with "Maintain"
+    }
+    
+    if first_word in word_mapping:
+        return word_mapping[first_word]
+    
+    # Pattern 3: Multi-word acronym (first letter of first 2-3 significant words)
+    # Skip common words like "and", "the", "of", "services"
+    skip_words = {'and', 'the', 'of', 'services', 'service', 'svc', 'svcs'}
+    significant_words = [w for w in words[:3] if w.lower() not in skip_words]
+    
+    if len(significant_words) >= 2:
+        # Take first letter of first 2 significant words
+        abbrev = ''.join(w[0].upper() for w in significant_words[:2])
+        # Common patterns
+        if abbrev in ['MO', 'EP', 'CS', 'ES']:
+            return abbrev
+    
+    # Pattern 4: Single word - use first 6-8 chars, remove common suffixes
+    if words:
+        clean_word = first_word
+        for suffix in ['services', 'service', 'svc', 'svcs']:
+            if clean_word.endswith(suffix):
+                clean_word = clean_word[:-len(suffix)]
+                break
+        
+        if clean_word:
+            return clean_word[:8].capitalize()
+        else:
+            return words[0][:8].capitalize()
+    
+    return None
+
+
 def generate_resource_code(cost_element, partner_cctr, cost_element_name, cost_elements_map=None):
     """Generate resource code from cost element and partner center"""
     
     # Normalize cost element to int
     ce_int = normalize_cost_element(cost_element)
     
-    # Try embedded cost elements map first
+    # Check hardcoded mapping FIRST (takes precedence - these are known correct mappings)
     abbrev = None
-    if cost_elements_map and ce_int:
-        ce_data = cost_elements_map.get(ce_int)
-        if ce_data:
-            # Use Cost Element Text to derive abbreviation
-            # For contract items, use first meaningful word (e.g., "Consulting Services" -> "Consult")
-            text = ce_data.get('Cost Element Text', '')
-            if text:
-                # Split and process words
-                words = text.split()
-                if words:
-                    first_word = words[0].lower()
-                    # Map common first words to abbreviations
-                    word_mapping = {
-                        'consulting': 'Consult',
-                        'consult': 'Consult',
-                        'engineering': 'Engr',
-                        'engineer': 'Engr',
-                        'environmental': 'Environ',
-                        'environment': 'Environ',
-                        'construction': 'Constr',
-                        'contract': 'Contract',
-                        'meals': 'Meals',
-                        'reimbursed': 'Reimburs',
-                    }
-                    
-                    # Check if first word matches a known pattern
-                    if first_word in word_mapping:
-                        abbrev = word_mapping[first_word]
-                    else:
-                        # For other words, use first 6-8 chars, properly capitalized
-                        # Remove common suffixes like "Services", "Svc", etc.
-                        clean_word = first_word
-                        for suffix in ['services', 'service', 'svc', 'svcs']:
-                            if clean_word.endswith(suffix):
-                                clean_word = clean_word[:-len(suffix)]
-                                break
-                        
-                        if clean_word:
-                            abbrev = clean_word[:8].capitalize()
-                        else:
-                            # Fallback: use first word as-is, capitalized
-                            abbrev = words[0][:8].capitalize()
-    
-    # Fall back to hardcoded mapping
-    if abbrev is None and ce_int:
+    if ce_int:
         abbrev = COST_ELEMENT_TO_ABBREV.get(ce_int)
     
-    # If still no abbreviation, try to create from cost element name
+    # If no hardcoded mapping, try embedded cost elements map with smart derivation
+    if abbrev is None and cost_elements_map and ce_int:
+        ce_data = cost_elements_map.get(ce_int)
+        if ce_data:
+            text = ce_data.get('Cost Element Text', '')
+            if text:
+                abbrev = derive_abbreviation_from_text(text)
+    
+    # If still no abbreviation, try to create from cost element name (fallback)
     if abbrev is None:
         # Try to create abbreviation from cost element name
         # For unknown codes, create a simplified abbreviation
@@ -254,8 +295,12 @@ def aggregate_actuals(df_export, operations_map, cost_elements_map=None):
         df_export['Cost Element'].astype(str).str.startswith('6010')
     ].groupby('Operation')['Val.in rep.cur.'].sum().to_dict()
     
-    # Filter out Operation 1.0 (AFUDC - handled separately)
-    df_filtered = df_export[df_export['Operation'] != 1.0].copy()
+    # Filter out only AFUDC cost elements from Operation 1.0 (5590030, 5590031)
+    # Keep other cost elements from Operation 1.0 - they map to BidItem 1010
+    df_filtered = df_export[
+        ~((df_export['Operation'] == 1.0) & 
+          (df_export['Cost Element'].isin([5590030.0, 5590031.0])))
+    ].copy()
     
     # Filter out overhead cost elements (601xxxx) - these don't appear in the output
     df_filtered = df_filtered[~df_filtered['Cost Element'].astype(str).str.startswith('6010')].copy()
@@ -289,6 +334,19 @@ def aggregate_actuals(df_export, operations_map, cost_elements_map=None):
     grouped['Activity'] = grouped['Operation'].apply(
         lambda op: operations_map.get(int(op), {}).get('activity', f'XXXX-{int(op)}A')
     )
+    
+    # Map Operation 1.0 non-AFUDC rows to BidItem 1010 with AFUDC activity pattern
+    # These rows should appear under BidItem 1010, Activity 0101-1011A (same as AFUDC)
+    operation_1_mask = (grouped['Operation'] == 1.0)
+    if operation_1_mask.any():
+        grouped.loc[operation_1_mask, 'BidItem'] = 1010
+        # Use AFUDC activity pattern: 0101-1010A -> 0101-1011A
+        base_activity = operations_map.get(1010, {}).get('activity', '0101-1010A')
+        if base_activity[-2] == '0':
+            afudc_activity = base_activity[:-2] + '1' + base_activity[-1]
+        else:
+            afudc_activity = base_activity
+        grouped.loc[operation_1_mask, 'Activity'] = afudc_activity
     
     # Add other required columns
     grouped['Quantity'] = grouped['Total quantity']
