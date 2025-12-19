@@ -114,6 +114,16 @@ COST_ELEMENT_TO_COST_TYPE = {
 # Default cost type for labor (660xxxx)
 LABOR_COST_TYPE = 'Labor'
 
+# Cost Type to Description Prefix Mapping (for Resource File)
+COST_TYPE_TO_PREFIX = {
+    'AFUDC': 'Actls. - AFUDC - ',
+    'Contracts': 'Actls. - Cont. - ',
+    'Labor': 'Actls. - Labr. - ',
+    'Labor Alloc.': 'Actls. - L.OH. - ',
+}
+# Default prefix for unknown cost types
+DEFAULT_PREFIX = 'Actls. - Other. - '
+
 
 def read_sap_export(filepath):
     """Read and clean SAP export file"""
@@ -366,14 +376,21 @@ def aggregate_actuals(df_export, operations_map):
 def create_resource_file(df_actuals):
     """Generate Resource File from actuals data"""
     
-    # Get unique resources
-    unique_resources = df_actuals[['Resource', 'Description']].drop_duplicates()
+    # Get unique resources with Cost Type to determine prefix
+    unique_resources = df_actuals[['Resource', 'Description', 'Cost Type']].drop_duplicates()
     
     resource_data = []
     
     for _, row in unique_resources.iterrows():
         resource_code = row['Resource']
         description = row['Description']
+        cost_type = row['Cost Type']
+        
+        # Get prefix based on Cost Type
+        prefix = COST_TYPE_TO_PREFIX.get(cost_type, DEFAULT_PREFIX)
+        
+        # Apply prefix to description
+        prefixed_description = f"{prefix}{description}"
         
         # Extract cost element or type
         is_header = resource_code in ['6AFUDC-Bo', '6AFUDC-Eq', '6Labor OH', '6Meals Ex', 
@@ -381,7 +398,7 @@ def create_resource_file(df_actuals):
         
         resource_data.append({
             'Local Resource Code': resource_code,
-            'Description': description,
+            'Description': prefixed_description,
             'Unit': np.nan,
             'Cost': np.nan,
             'Non-Tax?(Y/N)': np.nan,
@@ -540,7 +557,7 @@ def transform_sap_to_heavybid(input_file, output_file):
         df_resource.to_excel(writer, sheet_name='Resource File', index=False)
     
     print("\n" + "=" * 100)
-    print("TRANSFORMATION COMPLETE!")
+    print("TRANSFORMATION COMPLETE")
     print("=" * 100)
     print(f"\nOutput file created: {output_file}")
     print(f"  - Actuals Report: {len(df_actuals)} rows")
