@@ -266,29 +266,31 @@ def aggregate_actuals(df_export, operations_map):
         # Get the overhead value for this operation from the pre-calculated dict
         overhead_value = overhead_by_operation.get(biditem, 0.0)
         
-        labor_oh_row = {
-            'BidItem': biditem,
-            'Activity': activity,
-            'Resource': '6Labor OH',
-            'Quantity': 1.0,
-            'Units': 'LS',
-            'Unit Price': overhead_value,  # Use calculated overhead value
-            'Tax/OT %': 100,
-            'Crew Code': np.nan,
-            'Pieces': 1,
-            'Currency': np.nan,
-            'EOE %': np.nan,
-            'Rent Percent': np.nan,
-            'Escalation Percent': np.nan,
-            'Hours Adjustment': np.nan,
-            'Supp. Desc': np.nan,  # Labor Alloc. rows have NaN for Supp. Desc
-            'MH/Unit': np.nan,
-            'Material Factor Type': np.nan,
-            'Material Factor': np.nan,
-            'Description': 'Labor Alloc.',
-            'Cost Type': 'Labor Alloc.'
-        }
-        labor_oh_rows.append(labor_oh_row)
+        # Only add Labor OH row if there's actual overhead value (skip zero values)
+        if overhead_value > 0.0:
+            labor_oh_row = {
+                'BidItem': biditem,
+                'Activity': activity,
+                'Resource': '6Labor OH',
+                'Quantity': 1.0,
+                'Units': 'LS',
+                'Unit Price': overhead_value,  # Use calculated overhead value
+                'Tax/OT %': 100,
+                'Crew Code': np.nan,
+                'Pieces': 1,
+                'Currency': np.nan,
+                'EOE %': np.nan,
+                'Rent Percent': np.nan,
+                'Escalation Percent': np.nan,
+                'Hours Adjustment': np.nan,
+                'Supp. Desc': np.nan,  # Labor Alloc. rows have NaN for Supp. Desc
+                'MH/Unit': np.nan,
+                'Material Factor Type': np.nan,
+                'Material Factor': np.nan,
+                'Description': 'Labor Alloc.',
+                'Cost Type': 'Labor Alloc.'
+            }
+            labor_oh_rows.append(labor_oh_row)
     
     if labor_oh_rows:
         labor_oh_df = pd.DataFrame(labor_oh_rows)
