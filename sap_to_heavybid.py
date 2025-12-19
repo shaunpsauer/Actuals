@@ -264,10 +264,13 @@ def aggregate_actuals(df_export, operations_map):
     
     for (biditem, activity) in grouped[['BidItem', 'Activity']].drop_duplicates().values:
         # Get the overhead value for this operation from the pre-calculated dict
-        overhead_value = overhead_by_operation.get(biditem, 0.0)
+        # Convert biditem to float to match dict keys (Operation is float in df_export)
+        operation_float = float(biditem)
+        overhead_value = overhead_by_operation.get(operation_float, 0.0)
         
-        # Only add Labor OH row if there's actual overhead value (skip zero values)
-        if overhead_value > 0.0:
+        # Only add Labor OH row if there's actual overhead value (skip zero values and NaN)
+        # Use epsilon check for floating-point precision
+        if pd.notna(overhead_value) and abs(overhead_value) > 1e-10:
             labor_oh_row = {
                 'BidItem': biditem,
                 'Activity': activity,
