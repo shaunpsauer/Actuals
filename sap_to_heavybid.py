@@ -10,7 +10,13 @@ Version: 2.0 - Standalone (no Excel dependencies)
 All WBS operations data is embedded in wbs_operations_mapper.py
 
 Usage:
-    python sap_to_heavybid.py input_export.xlsx output_file.xlsx
+    python sap_to_heavybid.py
+    
+    The script will guide you through selecting:
+    - Your SAP export file (via file picker)
+    - Output folder (via folder picker)
+    
+    The output file will be automatically named <Order>_actuals.xlsx in the selected folder.
     
 Requirements:
     - sap_to_heavybid.py (this file)
@@ -24,6 +30,7 @@ from datetime import datetime
 from collections import defaultdict
 import sys
 import os
+import time
 import tkinter as tk
 from tkinter import filedialog
 
@@ -495,16 +502,16 @@ def get_order_from_export(filepath):
     return order_num
 
 
-def generate_output_filename(order_num):
-    """Generate output filename from Order number with collision-safe suffix"""
+def generate_output_filename(order_num, output_dir):
+    """Generate output filename from Order number with collision-safe suffix in specified directory"""
     base_filename = f"{order_num}_actuals.xlsx"
-    output_path = os.path.join(os.getcwd(), base_filename)
+    output_path = os.path.join(output_dir, base_filename)
     
     # If file exists, add timestamp suffix
     if os.path.exists(output_path):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         base_filename = f"{order_num}_actuals_{timestamp}.xlsx"
-        output_path = os.path.join(os.getcwd(), base_filename)
+        output_path = os.path.join(output_dir, base_filename)
     
     return output_path
 
@@ -525,20 +532,45 @@ def select_input_file():
     root.destroy()
     
     if not filepath:
-        print("No file selected. Exiting.")
+        print("Canceled - no file selected. Exiting.")
         sys.exit(0)
     
     return filepath
 
 
+def select_output_folder():
+    """Open folder picker to select output directory"""
+    # Hide the root tkinter window
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    
+    # Open directory dialog
+    folderpath = filedialog.askdirectory(
+        title="Select Output Folder"
+    )
+    
+    root.destroy()
+    
+    if not folderpath:
+        print("Canceled - no folder selected. Exiting.")
+        sys.exit(0)
+    
+    return folderpath
+
+
 def transform_sap_to_heavybid(input_file, output_file):
     """Main transformation function"""
     
-    print("=" * 100)
-    print("SAP EXPORT TO HEAVYBID TRANSFORMATION v2.0")
-    print("=" * 100)
+    banner_width = 80
+    title = "SAP EXPORT TO HEAVYBID TRANSFORMATION v2.0"
+    padding = (banner_width - len(title)) // 2
     
-    # Load operations map from embedded data (no Excel file needed!)
+    print("=" * banner_width)
+    print(" " * padding + title)
+    print("=" * banner_width)
+    
+    # Load operations map from embedded data
     print("\nLoading WBS operations map...")
     operations_map = build_operations_map()
     print(f"Loaded {len(operations_map)} operation mappings")
@@ -569,9 +601,14 @@ def transform_sap_to_heavybid(input_file, output_file):
         df_boe.to_excel(writer, sheet_name='Actual BoE', index=False)
         df_resource.to_excel(writer, sheet_name='Resource File', index=False)
     
-    print("\n" + "=" * 100)
-    print("TRANSFORMATION COMPLETE")
-    print("=" * 100)
+    # Display transformation complete banner
+    banner_width = 80
+    title = "TRANSFORMATION COMPLETE"
+    padding = (banner_width - len(title)) // 2
+    
+    print("\n" + "=" * banner_width)
+    print(" " * padding + title)
+    print("=" * banner_width)
     print(f"\nOutput file created: {output_file}")
     print(f"  - Actuals Report: {len(df_actuals)} rows")
     print(f"  - Actual BoE: {len(df_boe)} rows")
@@ -579,33 +616,46 @@ def transform_sap_to_heavybid(input_file, output_file):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 1:
-        # pen file picker and auto-generate output filename
-        print("No arguments provided. Opening file picker...")
-        input_file = select_input_file()
-        
-        # Extract Order number and generate output filename
-        print(f"\nExtracting Order number from: {input_file}")
-        try:
-            order_num = get_order_from_export(input_file)
-            output_file = generate_output_filename(order_num)
-            print(f"Order number: {order_num}")
-            print(f"Output file: {output_file}")
-        except Exception as e:
-            print(f"Error: {e}")
-            sys.exit(1)
-        
-        transform_sap_to_heavybid(input_file, output_file)
-        
-    elif len(sys.argv) == 3:
-        # Two arguments: existing CLI behavior
-        input_file = sys.argv[1]
-        output_file = sys.argv[2]
-        transform_sap_to_heavybid(input_file, output_file)
-        
-    else:
-        # Invalid argument count
-        print("Usage: python sap_to_heavybid.py [<input_export.xlsx> <output_file.xlsx>]")
-        print("\nIf no arguments provided, a file picker will open to select the SAP export.")
-        print("Output will be automatically named <Order>_actuals.xlsx in the current directory.")
+    # Display welcome banner
+    banner_width = 80
+    title = "SAP Actuals to HeavyBid"
+    padding = (banner_width - len(title)) // 2
+    
+    print("=" * banner_width)
+    print(" " * padding + title)
+    print("=" * banner_width)
+    print("\nThis tool will transform your SAP export into HeavyBid import format.")
+    print("You'll be prompted to select your SAP export file and output folder.")
+    print("The output file will contain 3 sheets: Actuals Report, Actual BoE, and Resource File.")
+    print("\nYou can cancel at any time by closing the file picker dialogs.\n")
+    
+    # Wait 3 seconds before opening file picker
+    print("Opening file picker in 3 seconds...")
+    time.sleep(3)
+    
+    # Step 1: Select input file
+    print("Step 1: Select SAP export file...")
+    input_file = select_input_file()
+    print(f"✓ Selected: {input_file}\n")
+    
+    # Extract Order number from the selected file
+    print("Extracting Order number from export file...")
+    try:
+        order_num = get_order_from_export(input_file)
+        print(f"✓ Order number: {order_num}\n")
+    except Exception as e:
+        print(f"Error extracting Order number: {e}")
         sys.exit(1)
+    
+    # Step 2: Select output folder
+    print("Step 2: Select output folder...")
+    output_folder = select_output_folder()
+    print(f"✓ Selected folder: {output_folder}\n")
+    
+    # Generate output filename in the selected folder
+    output_file = generate_output_filename(order_num, output_folder)
+    print(f"Output file will be saved as: {os.path.basename(output_file)}")
+    print(f"Full path: {output_file}\n")
+    
+    # Run transformation
+    transform_sap_to_heavybid(input_file, output_file)

@@ -40,18 +40,17 @@ pip install pandas openpyxl
 
 ### 3. Run
 
-**Easiest way (no typing required!):**
+**Just run the script:**
 ```bash
 python sap_to_heavybid.py
 ```
-A file picker will open - just select your SAP export file. The output will be automatically named `<Order>_actuals.xlsx` in the current directory.
 
-**Or specify files manually:**
-```bash
-python sap_to_heavybid.py YOUR_SAP_EXPORT.xlsx output.xlsx
-```
+You'll see a welcome message, then:
+1. **File picker opens** - Select your SAP export file
+2. **Folder picker opens** - Select where to save the output
+3. **Output file is created** - Automatically named `<Order>_actuals.xlsx` in your chosen folder
 
-**Done!** No configuration, no external files, just works.
+**Done!** No typing, no configuration, no external files - just works.
 
 ---
 
@@ -69,34 +68,39 @@ python sap_to_heavybid.py YOUR_SAP_EXPORT.xlsx output.xlsx
 
 ## Usage Examples
 
-### Easiest: No Arguments (File Picker)
+### Standard Usage (File & Folder Pickers)
 ```bash
 python sap_to_heavybid.py
 ```
-- Opens a file picker to select your SAP export
-- Automatically names output as `<Order>_actuals.xlsx` (e.g., `74051900_actuals.xlsx`)
-- If file already exists, adds timestamp: `74051900_actuals_20241216_143022.xlsx`
-- Output saved in current directory
 
-### Basic Usage (Manual File Names)
+**What happens:**
+1. Welcome banner appears: "SAP Actuals to HeavyBid"
+2. **File picker opens** - Select your SAP export file (`.xlsx` or `.xls`)
+3. Order number is automatically extracted from the file
+4. **Folder picker opens** - Select where to save the output file
+5. Output file is automatically named `<Order>_actuals.xlsx` (e.g., `74051900_actuals.xlsx`)
+6. If file already exists in that folder, adds timestamp: `74051900_actuals_20241216_143022.xlsx`
+7. Transformation runs and creates 3 sheets in the output file
+
+**You can cancel at any time** by closing either picker dialog.
+
+### Multiple Projects
 ```bash
-python sap_to_heavybid.py EXPORT_20251216_090633.XLSX 74051900_actuals.xlsx
+# Project 1
+cd C:\Projects\Job_74051900
+python sap_to_heavybid.py
+# Select export file, select output folder, done!
+
+# Project 2
+cd C:\Projects\Job_74052100
+python sap_to_heavybid.py
+# Same simple process
 ```
 
 ### From Any Location
 ```bash
-python C:\MyProjects\scripts\sap_to_heavybid.py input.xlsx output.xlsx
-```
-
-### Multiple Projects
-```bash
-# Project 1 - Using file picker (easiest!)
-cd C:\Projects\Job_74051900
-python sap_to_heavybid.py
-
-# Project 2 - Manual file names
-cd C:\Projects\Job_74052100
-python sap_to_heavybid.py EXPORT2.xlsx output2.xlsx
+# Run from anywhere - pickers let you navigate to files/folders
+python C:\MyProjects\scripts\sap_to_heavybid.py
 ```
 
 ---
@@ -176,11 +180,8 @@ cp -r "C:\Project_Templates\New_Project" "C:\Projects\Job_74052500"
 cd "C:\Projects\Job_74052500\Estimates"
 
 # Run conversion (scripts already there!)
-# Easiest: Just run with no arguments - file picker opens!
+# Just run - file and folder pickers guide you through it!
 python sap_to_heavybid.py
-
-# Or specify files manually:
-python sap_to_heavybid.py SAP_Export.xlsx output.xlsx
 ```
 
 ---
@@ -218,8 +219,9 @@ If you get a new WBS Dictionary Excel file:
 - Check that operation codes in SAP export are valid
 
 ### File Not Found
-- Make sure you're in the correct directory
-- Use full paths if needed: `python C:\scripts\sap_to_heavybid.py input.xlsx output.xlsx`
+- Use the file picker to navigate to your SAP export file
+- Use the folder picker to select where to save the output
+- No need to type paths - the pickers handle navigation for you
 
 ---
 
@@ -300,7 +302,8 @@ Most issues are solved by ensuring both Python files are together in the same di
 - 2 files only
 - Fully standalone
 - Copy and run
-- **Just run `python sap_to_heavybid.py` - file picker opens!**
+- **Just run `python sap_to_heavybid.py` - guided file and folder pickers!**
 - Auto-named output files
+- Choose exactly where to save your output
 
 Perfect for templates, portable, and reliable! 🎉
