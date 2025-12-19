@@ -20,7 +20,7 @@ Usage:
     
 Requirements:
     - sap_to_heavybid.py (this file)
-    - wbs_operations_mapper.py (operations dictionary)
+    - reference_data.py (operations and cost elements dictionary)
     - pandas, openpyxl libraries
 """
 
@@ -34,8 +34,8 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 
-# Import the operations mapper (no external Excel file needed!)
-from wbs_operations_mapper import build_operations_map
+# Import the reference data (no external Excel file needed!)
+from reference_data import build_operations_map, build_cost_elements_map
 
 
 # Cost Element to Resource Code Abbreviation Mapping
@@ -145,12 +145,73 @@ def read_sap_export(filepath):
     return df_clean
 
 
-def generate_resource_code(cost_element, partner_cctr, cost_element_name):
+def normalize_cost_element(cost_element):
+    """Normalize cost element to integer for consistent lookups"""
+    if pd.isna(cost_element):
+        return None
+    try:
+        # Convert to int (handles float like 5001237.0 -> 5001237)
+        return int(float(cost_element))
+    except (ValueError, TypeError):
+        return None
+
+
+def generate_resource_code(cost_element, partner_cctr, cost_element_name, cost_elements_map=None):
     """Generate resource code from cost element and partner center"""
     
-    # Get abbreviation
-    abbrev = COST_ELEMENT_TO_ABBREV.get(cost_element)
+    # Normalize cost element to int
+    ce_int = normalize_cost_element(cost_element)
     
+    # Try embedded cost elements map first
+    abbrev = None
+    if cost_elements_map and ce_int:
+        ce_data = cost_elements_map.get(ce_int)
+        if ce_data:
+            # Use Cost Element Text to derive abbreviation
+            # For contract items, use first meaningful word (e.g., "Consulting Services" -> "Consult")
+            text = ce_data.get('Cost Element Text', '')
+            if text:
+                # Split and process words
+                words = text.split()
+                if words:
+                    first_word = words[0].lower()
+                    # Map common first words to abbreviations
+                    word_mapping = {
+                        'consulting': 'Consult',
+                        'consult': 'Consult',
+                        'engineering': 'Engr',
+                        'engineer': 'Engr',
+                        'environmental': 'Environ',
+                        'environment': 'Environ',
+                        'construction': 'Constr',
+                        'contract': 'Contract',
+                        'meals': 'Meals',
+                        'reimbursed': 'Reimburs',
+                    }
+                    
+                    # Check if first word matches a known pattern
+                    if first_word in word_mapping:
+                        abbrev = word_mapping[first_word]
+                    else:
+                        # For other words, use first 6-8 chars, properly capitalized
+                        # Remove common suffixes like "Services", "Svc", etc.
+                        clean_word = first_word
+                        for suffix in ['services', 'service', 'svc', 'svcs']:
+                            if clean_word.endswith(suffix):
+                                clean_word = clean_word[:-len(suffix)]
+                                break
+                        
+                        if clean_word:
+                            abbrev = clean_word[:8].capitalize()
+                        else:
+                            # Fallback: use first word as-is, capitalized
+                            abbrev = words[0][:8].capitalize()
+    
+    # Fall back to hardcoded mapping
+    if abbrev is None and ce_int:
+        abbrev = COST_ELEMENT_TO_ABBREV.get(ce_int)
+    
+    # If still no abbreviation, try to create from cost element name
     if abbrev is None:
         # Try to create abbreviation from cost element name
         # For unknown codes, create a simplified abbreviation
@@ -171,7 +232,7 @@ def generate_resource_code(cost_element, partner_cctr, cost_element_name):
     return resource_code
 
 
-def aggregate_actuals(df_export, operations_map):
+def aggregate_actuals(df_export, operations_map, cost_elements_map=None):
     """
     Aggregate SAP export data by Operation, Cost Element, and Partner-CCtr
     Returns a DataFrame ready for Actuals Report
@@ -211,11 +272,17 @@ def aggregate_actuals(df_export, operations_map):
     grouped['Partner-CCtr'] = pd.to_numeric(grouped['Partner-CCtr_str'], errors='coerce')
     grouped.drop('Partner-CCtr_str', axis=1, inplace=True)
     
-    # Generate resource codes
-    grouped['Resource'] = grouped.apply(
-        lambda row: generate_resource_code(row['Cost Element'], row['Partner-CCtr'], row['Cost element name']),
-        axis=1
-    )
+    # Generate resource codes (using embedded cost elements map if available)
+    # Create a closure to capture cost_elements_map
+    def make_resource_code(row):
+        return generate_resource_code(
+            row['Cost Element'], 
+            row['Partner-CCtr'], 
+            row['Cost element name'], 
+            cost_elements_map
+        )
+    
+    grouped['Resource'] = grouped.apply(make_resource_code, axis=1)
     
     # Map operations to BidItems and Activities
     grouped['BidItem'] = grouped['Operation'].astype(int)
@@ -247,16 +314,44 @@ def aggregate_actuals(df_export, operations_map):
     grouped['Material Factor'] = np.nan
     grouped['Description'] = grouped['Cost element name']
     
-    # Determine Cost Type
-    def get_cost_type(cost_element):
-        if cost_element in COST_ELEMENT_TO_COST_TYPE:
-            return COST_ELEMENT_TO_COST_TYPE[cost_element]
-        elif str(cost_element).startswith('660'):
-            return LABOR_COST_TYPE
-        else:
-            return 'Other'
+    # Determine Cost Type (using embedded cost elements map if available)
+    # Create a closure to capture cost_elements_map
+    def make_get_cost_type(cost_elements_map):
+        def get_cost_type(cost_element):
+            # Normalize to int for lookup
+            ce_int = normalize_cost_element(cost_element)
+            
+            # Try embedded cost elements map first
+            if cost_elements_map and ce_int:
+                ce_data = cost_elements_map.get(ce_int)
+                if ce_data:
+                    # Use Level 1 Group or Grouping to determine Cost Type
+                    level1_group = ce_data.get('Level 1 Group', '')
+                    grouping = ce_data.get('Grouping', '')
+                    
+                    # Map to Cost Type
+                    if level1_group == 'Contract' or grouping == 'Contract':
+                        return 'Contracts'
+                    elif level1_group == 'Labor' or grouping == 'Labor':
+                        return LABOR_COST_TYPE
+                    elif level1_group == 'OverHeads' or grouping == 'OverHeads':
+                        return 'Labor Alloc.'
+                    elif level1_group == 'Materials' or grouping == 'Materials':
+                        return 'Other'
+            
+            # Fall back to hardcoded mapping
+            if ce_int and ce_int in COST_ELEMENT_TO_COST_TYPE:
+                return COST_ELEMENT_TO_COST_TYPE[ce_int]
+            elif ce_int and str(ce_int).startswith('660'):
+                return LABOR_COST_TYPE
+            elif ce_int and str(ce_int).startswith('50'):
+                # Cost elements starting with 50 are typically Contracts
+                return 'Contracts'
+            else:
+                return 'Other'
+        return get_cost_type
     
-    grouped['Cost Type'] = grouped['Cost Element'].apply(get_cost_type)
+    grouped['Cost Type'] = grouped['Cost Element'].apply(make_get_cost_type(cost_elements_map))
     
     # Set quantity to 1.0 for all non-labor rows (placeholder)
     # AND set Unit Price to the total value for non-labor rows
@@ -306,9 +401,13 @@ def aggregate_actuals(df_export, operations_map):
         labor_oh_df = pd.DataFrame(labor_oh_rows)
         grouped = pd.concat([grouped, labor_oh_df], ignore_index=True)
     
-    # Add AFUDC rows ONLY for BidItem 1010
+    # Add AFUDC rows ONLY if AFUDC data actually exists in the SAP export
+    # Check if totals are non-zero (using epsilon for floating-point comparison)
     afudc_rows = []
-    if 1010 in grouped['BidItem'].values:
+    has_afudc_borrowed = pd.notna(afudc_borrowed_total) and abs(afudc_borrowed_total) > 1e-10
+    has_afudc_equity = pd.notna(afudc_equity_total) and abs(afudc_equity_total) > 1e-10
+    
+    if (has_afudc_borrowed or has_afudc_equity) and 1010 in grouped['BidItem'].values:
         # Get the base activity for BidItem 1010
         activity_base = operations_map.get(1010, {}).get('activity', '0101-1010A')
         
@@ -319,51 +418,55 @@ def aggregate_actuals(df_export, operations_map):
         else:
             afudc_activity = activity_base
         
-        afudc_rows.append({
-            'BidItem': 1010,
-            'Activity': afudc_activity,
-            'Resource': '6AFUDC-Bo',
-            'Quantity': 1.0,
-            'Units': 'LS',
-            'Unit Price': afudc_borrowed_total,  # Use calculated AFUDC value
-            'Tax/OT %': 100,
-            'Crew Code': np.nan,
-            'Pieces': 1,
-            'Currency': np.nan,
-            'EOE %': np.nan,
-            'Rent Percent': np.nan,
-            'Escalation Percent': np.nan,
-            'Hours Adjustment': np.nan,
-            'Supp. Desc': 5590030.0,  # Cost Element for AFUDC-Borrowed
-            'MH/Unit': np.nan,
-            'Material Factor Type': np.nan,
-            'Material Factor': np.nan,
-            'Description': 'AFUDC-Borrowed',
-            'Cost Type': 'AFUDC'
-        })
+        # Only add AFUDC-Borrowed if it has a value
+        if has_afudc_borrowed:
+            afudc_rows.append({
+                'BidItem': 1010,
+                'Activity': afudc_activity,
+                'Resource': '6AFUDC-Bo',
+                'Quantity': 1.0,
+                'Units': 'LS',
+                'Unit Price': afudc_borrowed_total,  # Use calculated AFUDC value
+                'Tax/OT %': 100,
+                'Crew Code': np.nan,
+                'Pieces': 1,
+                'Currency': np.nan,
+                'EOE %': np.nan,
+                'Rent Percent': np.nan,
+                'Escalation Percent': np.nan,
+                'Hours Adjustment': np.nan,
+                'Supp. Desc': 5590030.0,  # Cost Element for AFUDC-Borrowed
+                'MH/Unit': np.nan,
+                'Material Factor Type': np.nan,
+                'Material Factor': np.nan,
+                'Description': 'AFUDC-Borrowed',
+                'Cost Type': 'AFUDC'
+            })
         
-        afudc_rows.append({
-            'BidItem': 1010,
-            'Activity': afudc_activity,
-            'Resource': '6AFUDC-Eq',
-            'Quantity': 1.0,
-            'Units': 'LS',
-            'Unit Price': afudc_equity_total,  # Use calculated AFUDC value
-            'Tax/OT %': 100,
-            'Crew Code': np.nan,
-            'Pieces': 1,
-            'Currency': np.nan,
-            'EOE %': np.nan,
-            'Rent Percent': np.nan,
-            'Escalation Percent': np.nan,
-            'Hours Adjustment': np.nan,
-            'Supp. Desc': 5590031.0,  # Cost Element for AFUDC-Equity
-            'MH/Unit': np.nan,
-            'Material Factor Type': np.nan,
-            'Material Factor': np.nan,
-            'Description': 'AFUDC-Equity',
-            'Cost Type': 'AFUDC'
-        })
+        # Only add AFUDC-Equity if it has a value
+        if has_afudc_equity:
+            afudc_rows.append({
+                'BidItem': 1010,
+                'Activity': afudc_activity,
+                'Resource': '6AFUDC-Eq',
+                'Quantity': 1.0,
+                'Units': 'LS',
+                'Unit Price': afudc_equity_total,  # Use calculated AFUDC value
+                'Tax/OT %': 100,
+                'Crew Code': np.nan,
+                'Pieces': 1,
+                'Currency': np.nan,
+                'EOE %': np.nan,
+                'Rent Percent': np.nan,
+                'Escalation Percent': np.nan,
+                'Hours Adjustment': np.nan,
+                'Supp. Desc': 5590031.0,  # Cost Element for AFUDC-Equity
+                'MH/Unit': np.nan,
+                'Material Factor Type': np.nan,
+                'Material Factor': np.nan,
+                'Description': 'AFUDC-Equity',
+                'Cost Type': 'AFUDC'
+            })
     
     if afudc_rows:
         afudc_df = pd.DataFrame(afudc_rows)
@@ -575,13 +678,18 @@ def transform_sap_to_heavybid(input_file, output_file):
     operations_map = build_operations_map()
     print(f"Loaded {len(operations_map)} operation mappings")
     
+    # Load cost elements map from embedded data
+    print("\nLoading cost elements map...")
+    cost_elements_map = build_cost_elements_map()
+    print(f"Loaded {len(cost_elements_map)} cost element mappings")
+    
     # Read SAP export
     print(f"\nReading SAP export: {input_file}")
     df_export = read_sap_export(input_file)
     
     # Transform to actuals report
     print("\nAggregating actuals...")
-    df_actuals = aggregate_actuals(df_export, operations_map)
+    df_actuals = aggregate_actuals(df_export, operations_map, cost_elements_map)
     print(f"Generated {len(df_actuals)} actuals rows")
     
     # Create resource file
