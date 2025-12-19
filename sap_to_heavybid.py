@@ -382,7 +382,8 @@ def create_resource_file(df_actuals):
     """Generate Resource File from actuals data"""
     
     # Get unique resources with Cost Type to determine prefix
-    unique_resources = df_actuals[['Resource', 'Description', 'Cost Type']].drop_duplicates()
+    # Use subset=['Resource'] to ensure only one row per unique Resource code
+    unique_resources = df_actuals[['Resource', 'Description', 'Cost Type']].drop_duplicates(subset=['Resource'], keep='first')
     
     resource_data = []
     
@@ -487,7 +488,7 @@ def get_order_from_export(filepath):
     return order_num
 
 
-def generate_output_filename(input_file, order_num):
+def generate_output_filename(order_num):
     """Generate output filename from Order number with collision-safe suffix"""
     base_filename = f"{order_num}_actuals.xlsx"
     output_path = os.path.join(os.getcwd(), base_filename)
@@ -572,7 +573,7 @@ def transform_sap_to_heavybid(input_file, output_file):
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        # No arguments: open file picker and auto-generate output filename
+        # pen file picker and auto-generate output filename
         print("No arguments provided. Opening file picker...")
         input_file = select_input_file()
         
@@ -580,7 +581,7 @@ if __name__ == '__main__':
         print(f"\nExtracting Order number from: {input_file}")
         try:
             order_num = get_order_from_export(input_file)
-            output_file = generate_output_filename(input_file, order_num)
+            output_file = generate_output_filename(order_num)
             print(f"Order number: {order_num}")
             print(f"Output file: {output_file}")
         except Exception as e:
