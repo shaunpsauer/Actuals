@@ -6,14 +6,17 @@ This script transforms SAP transaction exports into HeavyBid import format with 
 2. Actual BoE - Notes for each BidItem/Activity
 3. Resource File - Resource definitions
 
-Version: 2.0 - Standalone (no Excel dependencies)
-All WBS operations data is embedded in wbs_operations_mapper.py
+Version: 2.1 - With SAP GUI Automation
+All WBS operations data is embedded in reference_data.py
 
 Usage:
     python sap_to_heavybid.py
     
-    The script will guide you through selecting:
-    - Your SAP export file (via file picker)
+    The script will prompt you to choose:
+    1. Export from SAP (automated) - Requires SAP GUI and pywin32
+    2. Use existing SAP export file - Traditional file picker workflow
+    
+    Then you'll select:
     - Output folder (via folder picker)
     
     The output file will be automatically named <Order>_actuals.xlsx in the selected folder.
@@ -21,7 +24,12 @@ Usage:
 Requirements:
     - sap_to_heavybid.py (this file)
     - reference_data.py (operations and cost elements dictionary)
+    - sap_automation.py (SAP GUI automation module, optional)
     - pandas, openpyxl libraries
+    - pywin32 (for SAP automation, optional but recommended)
+    
+Installation:
+    pip install -r requirements.txt
 """
 
 import pandas as pd
@@ -36,6 +44,20 @@ from tkinter import filedialog
 
 # Import the reference data (no external Excel file needed!)
 from reference_data import build_operations_map, build_cost_elements_map
+
+# Import SAP automation functions
+try:
+    import win32com.client
+    from sap_automation import (
+        check_sap_connection,
+        launch_sap_gui,
+        wait_for_sap_login,
+        handle_sap_export_workflow
+    )
+    SAP_AUTOMATION_AVAILABLE = True
+except ImportError:
+    SAP_AUTOMATION_AVAILABLE = False
+    print("Warning: SAP automation not available. Install pywin32 to enable SAP export: pip install pywin32")
 
 
 # Cost Element to Resource Code Abbreviation Mapping
@@ -821,18 +843,70 @@ if __name__ == '__main__':
     print(" " * padding + title)
     print("=" * banner_width)
     print("\nThis tool will transform your SAP export into HeavyBid import format.")
-    print("You'll be prompted to select your SAP export file and output folder.")
     print("The output file will contain 3 sheets: Actuals Report, Actual BoE, and Resource File.")
-    print("\nYou can cancel at any time by closing the file picker dialogs.\n")
     
-    # Wait 1 second before opening file picker
-    print("Opening file picker in 1 second...")
-    time.sleep(1)
+    # Determine workflow: SAP export or use existing file
+    input_file = None
+    order_num = None
     
-    # Step 1: Select input file
-    print("Step 1: Select SAP export file...")
-    input_file = select_input_file()
-    print(f"✓ Selected: {input_file}\n")
+    if SAP_AUTOMATION_AVAILABLE:
+        print("\nChoose an option:")
+        print("  1. Export from SAP (automated)")
+        print("  2. Use existing SAP export file")
+        
+        while True:
+            choice = input("\nEnter choice (1 or 2): ").strip()
+            if choice in ['1', '2']:
+                break
+            print("Invalid choice. Please enter 1 or 2.")
+        
+        if choice == '1':
+            # SAP export workflow
+            print("\n" + "=" * 80)
+            print("SAP Export Workflow")
+            print("=" * 80)
+            
+            success, exported_file, error_msg = handle_sap_export_workflow()
+            
+            if not success:
+                print(f"\n❌ SAP export failed: {error_msg}")
+                print("\nFalling back to file picker...")
+                choice = '2'  # Fall back to file picker
+            else:
+                # Ask user for the actual file path if SAP saved it elsewhere
+                print("\n" + "=" * 80)
+                print("File Location")
+                print("=" * 80)
+                print(f"SAP export completed. The file may have been saved to a default location.")
+                print(f"If a save dialog appeared, please note where you saved the file.")
+                
+                use_suggested = input(f"\nUse suggested path ({exported_file})? (y/n): ").strip().lower()
+                
+                if use_suggested == 'y' and os.path.exists(exported_file):
+                    input_file = exported_file
+                else:
+                    print("\nPlease select the exported SAP file...")
+                    input_file = select_input_file()
+                    print(f"✓ Selected: {input_file}\n")
+        
+        if choice == '2' or input_file is None:
+            # Use existing file workflow
+            print("\n" + "=" * 80)
+            print("Select SAP Export File")
+            print("=" * 80)
+            print("Opening file picker in 1 second...")
+            time.sleep(1)
+            
+            input_file = select_input_file()
+            print(f"✓ Selected: {input_file}\n")
+    else:
+        # SAP automation not available, use file picker
+        print("\nYou'll be prompted to select your SAP export file and output folder.")
+        print("Opening file picker in 1 second...")
+        time.sleep(1)
+        
+        input_file = select_input_file()
+        print(f"✓ Selected: {input_file}\n")
     
     # Extract Order number from the selected file
     print("Extracting Order number from export file...")

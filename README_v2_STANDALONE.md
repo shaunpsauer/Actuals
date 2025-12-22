@@ -1,13 +1,24 @@
-# SAP to HeavyBid Converter v2.0 - Standalone Edition
+# SAP to HeavyBid Converter v2.1 - With SAP GUI Automation
+
+## 🎉 What's New in v2.1
+
+**SAP GUI Automation!** Export data directly from SAP without manually running VBA scripts first!
+
+### New Features
+- ✅ **Automated SAP Export** - Connect to SAP GUI and export data automatically
+- ✅ **Smart Login Detection** - Detects if you're logged into SAP and can launch SAP Logon if needed
+- ✅ **Seamless Workflow** - Export from SAP → Transform to HeavyBid in one step
+- ✅ **Fallback Support** - Still works with existing export files if SAP automation isn't available
 
 ## 🎉 What's New in v2.0
 
 **No external Excel file required!** All WBS operations data is now embedded directly in the Python scripts.
 
-### Simple Two-File Setup
-You only need:
+### Simple Setup
+You need:
 1. ✅ `sap_to_heavybid.py` - Main transformation script
-2. ✅ `wbs_operations_mapper.py` - WBS operations dictionary (embedded data)
+2. ✅ `reference_data.py` - WBS operations dictionary (embedded data)
+3. ✅ `sap_automation.py` - SAP GUI automation module (optional, for automated exports)
 
 **That's it!** No more `Gas_Transmission_WBS_and_Operations_Dictionary_REFERENCE.xlsx` needed.
 
@@ -35,8 +46,15 @@ Put both Python files in your project folder:
 
 ### 2. Install Python Libraries (one-time)
 ```bash
-pip install pandas openpyxl
+pip install -r requirements.txt
 ```
+
+Or manually:
+```bash
+pip install pandas openpyxl pywin32
+```
+
+**Note:** `pywin32` is required for SAP automation. If you only want to use existing export files, you can skip it.
 
 ### 3. Run
 
@@ -45,7 +63,17 @@ pip install pandas openpyxl
 python sap_to_heavybid.py
 ```
 
-You'll see a welcome message, then:
+You'll see a welcome message, then choose:
+
+**Option 1: Export from SAP (Automated)**
+1. **Check SAP connection** - Script detects if you're logged into SAP
+2. **Launch SAP Logon** (if needed) - Script can launch SAP Logon for you
+3. **Enter parameters** - Order number, Controlling Area, Date range
+4. **Automated export** - Script executes the SAP export workflow
+5. **Select output folder** - Choose where to save the HeavyBid file
+6. **Transformation** - Automatically transforms to HeavyBid format
+
+**Option 2: Use Existing File (Traditional)**
 1. **File picker opens** - Select your SAP export file
 2. **Folder picker opens** - Select where to save the output
 3. **Output file is created** - Automatically named `<Order>_actuals.xlsx` in your chosen folder
@@ -56,13 +84,16 @@ You'll see a welcome message, then:
 
 ## Features
 
-✅ **Fully Standalone** - No Excel dependencies
-✅ **Portable** - Copy 2 files, works anywhere
+✅ **SAP GUI Automation** - Export directly from SAP without VBA scripts
+✅ **Smart Connection Handling** - Detects and manages SAP login status
+✅ **Fully Standalone** - No Excel dependencies for reference data
+✅ **Portable** - Copy 3 files, works anywhere
 ✅ **Template-Ready** - Perfect for project folder templates
 ✅ **Fast** - Embedded data loads instantly
 ✅ **Stable** - No missing file errors
 ✅ **Adaptive** - Works with any SAP export structure
 ✅ **Complete** - All 74 WBS operations included
+✅ **Backward Compatible** - Still works with existing export files
 
 ---
 
