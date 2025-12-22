@@ -312,12 +312,24 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
         print("✓ Report loaded successfully")
         
         # Step 7: Prepare grid for export (from VBA lines 28-30)
+        # These operations are optional - try each one individually, but don't fail if they don't work
+        print("Preparing grid for export...")
         try:
             grid.SetCurrentCell(4, "WRBTR")
+        except Exception as e:
+            print(f"  Warning: Could not set current cell: {e}")
+        
+        try:
             grid.FirstVisibleColumn = "UOB_TXT"
+        except Exception as e:
+            print(f"  Warning: Could not set first visible column: {e}")
+        
+        try:
             grid.SelectedRows = "4"
         except Exception as e:
-            return False, None, f"Could not prepare grid for export: {e}. The grid may not be in the expected format."
+            print(f"  Warning: Could not set selected rows: {e}")
+        
+        print("✓ Grid prepared (some operations may have been skipped)")
         
         # Step 8: Export to Excel - First export (from VBA lines 31-35)
         print("Exporting to Excel (first export)...")
