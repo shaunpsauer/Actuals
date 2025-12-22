@@ -311,29 +311,21 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
         
         print("✓ Report loaded successfully")
         
-        # Step 7: Prepare grid for export (from VBA lines 28-30)
-        # These operations are optional - try each one individually, but don't fail if they don't work
-        print("Preparing grid for export...")
+        # Step 7: Export to Excel - Simplified: just click a cell and right-click Export Spreadsheet
+        print("Exporting to Excel...")
         try:
-            grid.SetCurrentCell(4, "WRBTR")
-        except Exception as e:
-            print(f"  Warning: Could not set current cell: {e}")
-        
-        try:
-            grid.FirstVisibleColumn = "UOB_TXT"
-        except Exception as e:
-            print(f"  Warning: Could not set first visible column: {e}")
-        
-        try:
-            grid.SelectedRows = "4"
-        except Exception as e:
-            print(f"  Warning: Could not set selected rows: {e}")
-        
-        print("✓ Grid prepared (some operations may have been skipped)")
-        
-        # Step 8: Export to Excel - First export (from VBA lines 31-35)
-        print("Exporting to Excel (first export)...")
-        try:
+            # Click on a cell (use first data cell - row 0, first column)
+            try:
+                grid.SetCurrentCell(0, 0)
+            except:
+                # If that fails, try setting to first row, any column
+                try:
+                    grid.SetCurrentCell(0, "WRBTR")
+                except:
+                    # If that also fails, just proceed - grid might already have a cell selected
+                    pass
+            
+            # Right-click to open context menu and select "Export Spreadsheet" (XXL)
             grid.ContextMenu()
             grid.SelectContextMenuItem("&XXL")
             
@@ -342,40 +334,11 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
             try:
                 # Button 0 is typically "OK" or "Save"
                 session.FindById("wnd[1]/tbar[0]/btn[0]").Press()
-                # Button 12 might be "Save" or similar
-                session.FindById("wnd[1]/tbar[0]/btn[12]").Press()
             except Exception as e:
-                print(f"Warning: Could not handle first export dialog automatically: {e}")
-                print("You may need to manually handle the save dialog.")
-            
-            # Close export dialog
-            try:
-                time.sleep(0.5)
-                session.FindById("wnd[1]").Close()
-            except:
-                pass
-        except Exception as e:
-            return False, None, f"Error during first Excel export: {e}"
-        
-        time.sleep(1)
-        
-        # Step 9: Export to Excel - Second export (from VBA lines 36-39)
-        # The VBA script does this twice, so we'll do the same
-        print("Exporting to Excel (second export)...")
-        try:
-            grid.ContextMenu()
-            grid.SelectContextMenuItem("&XXL")
-            
-            # Handle Excel save dialog - second time
-            time.sleep(1)
-            try:
-                session.FindById("wnd[1]/tbar[0]/btn[0]").Press()
-                session.FindById("wnd[1]/tbar[0]/btn[0]").Press()  # Press twice as in VBA
-            except Exception as e:
-                print(f"Warning: Could not handle second export dialog automatically: {e}")
+                print(f"Warning: Could not handle export dialog automatically: {e}")
                 print("You may need to manually handle the save dialog.")
         except Exception as e:
-            return False, None, f"Error during second Excel export: {e}"
+            return False, None, f"Error during Excel export: {e}"
         
         # Determine output file path
         if output_path is None:
