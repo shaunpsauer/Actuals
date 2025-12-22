@@ -185,7 +185,39 @@ def prompt_sap_parameters():
     }
 
 
-def execute_sap_export(order_num, controlling_area, date_from, date_to, output_path=None):
+def navigate_to_transaction(session, transaction_code):
+    """
+    Navigate to a specific SAP transaction.
+    
+    Args:
+        session: SAP session object
+        transaction_code: Transaction code (e.g., "KOB1")
+    
+    Returns:
+        tuple: (success: bool, error_message: str or None)
+    """
+    try:
+        # Method 1: Try using StartTransaction (preferred method)
+        try:
+            session.StartTransaction(transaction_code)
+            time.sleep(1.5)  # Wait for transaction to load
+            return True, None
+        except:
+            pass
+        
+        # Method 2: Alternative - use transaction input field
+        try:
+            # Clear any existing input in the transaction field
+            okcd_field = session.FindById("wnd[0]/tbar[0]/okcd")
+            okcd_field.Text = transaction_code
+            session.FindById("wnd[0]").SendVKey(0)  # Press Enter
+            time.sleep(1.5)  # Wait for transaction to load
+            return True, None
+        except Exception as e2:
+            return False, f"Could not navigate to transaction {transaction_code}. Error: {str(e2)}. Please ensure you are logged into SAP and try again."
+
+
+def execute_sap_export(order_num, controlling_area, date_from, date_to, output_path=None, transaction_code="KOB1"):
     """
     Execute the SAP export workflow based on the VBA script.
     
@@ -195,6 +227,7 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
         date_from: Start date in MM/DD/YYYY format (e.g., "01/01/2010")
         date_to: End date in MM/DD/YYYY format (e.g., "12/22/2025")
         output_path: Optional path to save the exported file. If None, uses temp directory.
+        transaction_code: SAP transaction code (default: "KOB1")
     
     Returns:
         tuple: (success: bool, file_path: str or None, error_message: str or None)
@@ -205,7 +238,17 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
         if not success:
             return False, None, error_msg
         
-        print("Connected to SAP. Executing export workflow...")
+        print("Connected to SAP. Navigating to transaction...")
+        
+        # Navigate to the transaction
+        success, error_msg = navigate_to_transaction(session, transaction_code)
+        if not success:
+            return False, None, error_msg
+        
+        print(f"✓ Navigated to transaction {transaction_code}")
+        time.sleep(1)  # Wait for screen to fully load
+        
+        print("Executing export workflow...")
         
         # Step 1: Resize working pane (from VBA line 16)
         try:
@@ -374,12 +417,13 @@ def handle_sap_export_workflow():
     # Get parameters
     params = prompt_sap_parameters()
     
-    # Execute export
+    # Execute export (KOB1 is the transaction code)
     success, file_path, error_msg = execute_sap_export(
         params['order_num'],
         params['controlling_area'],
         params['date_from'],
-        params['date_to']
+        params['date_to'],
+        transaction_code="KOB1"
     )
     
     return success, file_path, error_msg
