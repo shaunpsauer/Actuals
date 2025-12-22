@@ -825,9 +825,9 @@ if __name__ == '__main__':
     print("The output file will contain 3 sheets: Actuals Report, Actual BoE, and Resource File.")
     print("\nYou can cancel at any time by closing the file picker dialogs.\n")
     
-    # Wait 3 seconds before opening file picker
-    print("Opening file picker in 3 seconds...")
-    time.sleep(3)
+    # Wait 1 second before opening file picker
+    print("Opening file picker in 1 second...")
+    time.sleep(1)
     
     # Step 1: Select input file
     print("Step 1: Select SAP export file...")
