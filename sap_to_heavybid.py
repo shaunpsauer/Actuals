@@ -186,6 +186,19 @@ def derive_abbreviation_from_text(text):
                     return 'ENGR'
                 return abbrev
     
+    # Pattern 1.5: Multi-word patterns with "Management" (e.g., "Construction Management Contracts")
+    # VBA macro pattern: first 5 chars of first word + space + first 2 chars of second word
+    # e.g., "Construction Management Contracts" -> "Const Mg"
+    if len(words) >= 2:
+        first_word = words[0]
+        second_word = words[1].lower()
+        
+        # Check if second word is "Management" (case-insensitive) and first word is long enough
+        if second_word == 'management' and len(first_word) >= 5:
+            # First 5 chars of first word + space + "Mg" (capital M, lowercase g)
+            abbrev = f"{first_word[:5]} Mg"
+            return abbrev
+    
     # Pattern 2: Known word mappings (first word)
     first_word = words[0].lower() if words else ''
     word_mapping = {
