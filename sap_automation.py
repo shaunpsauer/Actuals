@@ -267,31 +267,16 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
         except Exception as e:
             return False, None, f"Could not set Controlling Area field: {e}"
         
-        # Step 4: Set Date From field (from VBA lines 19-23)
+        # Step 4: Set Date From field (simplified - skip calendar picker that was a mistake in VBA)
         try:
-            # First, set focus and open calendar
             date_low_field = session.FindById("wnd[0]/usr/ctxtR_BUDAT-LOW")
-            date_low_field.SetFocus()
-            date_low_field.CaretPosition = 5
-            session.FindById("wnd[0]").SendVKey(4)  # F4 to open calendar
-            
-            # Close calendar popup if it appears
-            try:
-                time.sleep(0.5)
-                session.FindById("wnd[1]").Close()
-            except:
-                pass
-            
-            # Set the date
             date_low_field.Text = date_from
         except Exception as e:
             return False, None, f"Could not set Date From field: {e}"
         
-        # Step 5: Set Date To field (from VBA lines 24-26)
+        # Step 5: Set Date To field (simplified - skip focus/caret position that was a mistake in VBA)
         try:
             date_high_field = session.FindById("wnd[0]/usr/ctxtR_BUDAT-HIGH")
-            date_high_field.SetFocus()
-            date_high_field.CaretPosition = 10
             date_high_field.Text = date_to
         except Exception as e:
             return False, None, f"Could not set Date To field: {e}"
