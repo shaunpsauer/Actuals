@@ -288,18 +288,36 @@ def execute_sap_export(order_num, controlling_area, date_from, date_to, output_p
         except Exception as e:
             return False, None, f"Could not execute report: {e}. Please check that all fields are filled correctly."
         
-        # Wait for report to load
+        # Wait for report to load - poll for grid to be available
         print("Waiting for report to load...")
-        time.sleep(3)
+        grid = None
+        max_wait_time = 30  # Maximum wait time in seconds
+        check_interval = 0.5  # Check every 0.5 seconds
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            try:
+                grid = session.FindById("wnd[0]/usr/cntlGRID1/shellcont/shell/shellcont[1]/shell")
+                # If we can access the grid, it's loaded
+                break
+            except:
+                time.sleep(check_interval)
+                elapsed_time += check_interval
+                if int(elapsed_time) % 2 == 0:  # Print every 2 seconds
+                    print(f"  Still waiting... ({int(elapsed_time)}s)")
+        
+        if grid is None:
+            return False, None, f"Report did not load within {max_wait_time} seconds. Please check if the report executed successfully or if there's an error message in SAP."
+        
+        print("✓ Report loaded successfully")
         
         # Step 7: Prepare grid for export (from VBA lines 28-30)
         try:
-            grid = session.FindById("wnd[0]/usr/cntlGRID1/shellcont/shell/shellcont[1]/shell")
             grid.SetCurrentCell(4, "WRBTR")
             grid.FirstVisibleColumn = "UOB_TXT"
             grid.SelectedRows = "4"
         except Exception as e:
-            return False, None, f"Could not prepare grid for export: {e}. The report may not have loaded correctly."
+            return False, None, f"Could not prepare grid for export: {e}. The grid may not be in the expected format."
         
         # Step 8: Export to Excel - First export (from VBA lines 31-35)
         print("Exporting to Excel (first export)...")
