@@ -420,12 +420,28 @@ def aggregate_actuals(df_export, operations_map, cost_elements_map=None):
     
     # Add Labor Overhead rows for each BidItem/Activity combination
     # NOTE: Labor OH is added to ALL BidItems, even those without Labor!
+    # IMPORTANT: Use Operation (not BidItem) to look up overhead, since Operation 1.0
+    # gets remapped to BidItem 1010, and we need to track which Operation each
+    # BidItem/Activity combination came from to avoid duplicates
     labor_oh_rows = []
     
-    for (biditem, activity) in grouped[['BidItem', 'Activity']].drop_duplicates().values:
-        # Get the overhead value for this operation from the pre-calculated dict
-        # Convert biditem to float to match dict keys (Operation is float in df_export)
-        operation_float = float(biditem)
+    # Track which BidItem/Activity combinations we've already added Labor OH for
+    # to prevent duplicates when multiple operations map to the same BidItem
+    added_labor_oh = set()
+    
+    # Iterate over unique Operation/BidItem/Activity combinations to correctly
+    # map overhead values to their source operations
+    for (operation, biditem, activity) in grouped[['Operation', 'BidItem', 'Activity']].drop_duplicates().values:
+        # Create a unique key for this BidItem/Activity combination
+        key = (biditem, activity)
+        
+        # Skip if we've already added Labor OH for this BidItem/Activity
+        if key in added_labor_oh:
+            continue
+        
+        # Get the overhead value for the ORIGINAL operation (not the BidItem)
+        # Operation is already a float in the grouped dataframe
+        operation_float = float(operation)
         overhead_value = overhead_by_operation.get(operation_float, 0.0)
         
         # Only add Labor OH row if there's actual overhead value (skip zero values and NaN)
@@ -454,6 +470,7 @@ def aggregate_actuals(df_export, operations_map, cost_elements_map=None):
                 'Cost Type': 'Labor Alloc.'
             }
             labor_oh_rows.append(labor_oh_row)
+            added_labor_oh.add(key)  # Mark this combination as processed
     
     if labor_oh_rows:
         labor_oh_df = pd.DataFrame(labor_oh_rows)
