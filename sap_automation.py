@@ -196,25 +196,24 @@ def navigate_to_transaction(session, transaction_code):
     Returns:
         tuple: (success: bool, error_message: str or None)
     """
+    # Method 1: Try using StartTransaction (preferred method)
     try:
-        # Method 1: Try using StartTransaction (preferred method)
-        try:
-            session.StartTransaction(transaction_code)
-            time.sleep(1.5)  # Wait for transaction to load
-            return True, None
-        except:
-            pass
-        
-        # Method 2: Alternative - use transaction input field
-        try:
-            # Clear any existing input in the transaction field
-            okcd_field = session.FindById("wnd[0]/tbar[0]/okcd")
-            okcd_field.Text = transaction_code
-            session.FindById("wnd[0]").SendVKey(0)  # Press Enter
-            time.sleep(1.5)  # Wait for transaction to load
-            return True, None
-        except Exception as e2:
-            return False, f"Could not navigate to transaction {transaction_code}. Error: {str(e2)}. Please ensure you are logged into SAP and try again."
+        session.StartTransaction(transaction_code)
+        time.sleep(1.5)  # Wait for transaction to load
+        return True, None
+    except:
+        pass
+    
+    # Method 2: Alternative - use transaction input field
+    try:
+        # Clear any existing input in the transaction field
+        okcd_field = session.FindById("wnd[0]/tbar[0]/okcd")
+        okcd_field.Text = transaction_code
+        session.FindById("wnd[0]").SendVKey(0)  # Press Enter
+        time.sleep(1.5)  # Wait for transaction to load
+        return True, None
+    except Exception as e2:
+        return False, f"Could not navigate to transaction {transaction_code}. Error: {str(e2)}. Please ensure you are logged into SAP and try again."
 
 
 def execute_sap_export(order_num, controlling_area, date_from, date_to, output_path=None, transaction_code="KOB1"):
